@@ -998,6 +998,10 @@ class EntryAdapters:
         q_filter_terms = Q()
 
         explicit_word_terms = EntryAdapters.word_filer.get_filter_terms(query)
+        # We changed the get_filter_terms function to split the file names into the ones the user wants to keep denoted with a + and
+        # the ones the user doesn't want to keep denoted with a -
+
+        # Similar to word_filter.py
         file_filters = EntryAdapters.file_filter.get_filter_terms(query)
         date_filters = EntryAdapters.date_filter.get_query_date_range(query)
 
@@ -1010,13 +1014,32 @@ class EntryAdapters:
             elif term.startswith("-"):
                 q_filter_terms &= ~Q(raw__icontains=term[1:])
 
+        # q_file_filter_terms = Q()
+
+        # if len(file_filters) > 0:
+        #     for term in file_filters:
+        #         q_file_filter_terms |= Q(file_path__regex=term)
+
+        #     q_filter_terms &= q_file_filter_terms
+
+        # We will make two file terms variables and seperate the ones we want to keep and remove into them.
+
         q_file_filter_terms = Q()
+        q_file_removal_terms = Q()
 
-        if len(file_filters) > 0:
-            for term in file_filters:
-                q_file_filter_terms |= Q(file_path__regex=term)
+        for term in file_filters:
+            if term.startswith("+"):
+                # In this case we want to keep this file
+                q_file_filter_terms |= Q(file_path__regex=term[1:])
+            elif term.startswith("-"):
+                # In this case we want to remove this file so we add it to q_file_removal_terms to remove in one go later
+                q_file_removal_terms |= Q(file_path__regex=term[1:])
+        
+        # We can add the files we want to q_filter_terms
+        q_filter_terms &= q_file_filter_terms
 
-            q_filter_terms &= q_file_filter_terms
+        # And now we can remove the files we want ignored by adding the ~ to the variable to negate it
+        q_filter_terms &+ ~q_file_removal_terms
 
         if len(date_filters) > 0:
             min_date, max_date = date_filters
